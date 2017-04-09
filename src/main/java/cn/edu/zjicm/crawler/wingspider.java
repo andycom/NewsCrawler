@@ -6,13 +6,10 @@ import java.util.ArrayList;
 import java.util.Timer;
 import java.util.TimerTask;
 
-import org.apache.log4j.Logger;
-import org.apache.log4j.PropertyConfigurator;
+import org.apache.logging.slf4j.Log4jLogger;
 import org.omg.CORBA.PUBLIC_MEMBER;
 
-import com.wingspider.Initialization.readSeedURL;
-import com.wingspider.database.sql2005;
-
+import cn.edu.zjicm.pipeline.sql2005;
 import cn.edu.zjicm.spider.core.Gather;
 import cn.edu.zjicm.spider.core.zjicmSpider;
 import cn.edu.zjicm.spider.zjicmspider.zjicmspider;
@@ -23,15 +20,12 @@ import cn.edu.zjicm.spider.zjicmspider.zjicmspider;
  */
 public class wingspider {
 	public static int signal;
-	public static Logger logger; // log4j��־
+	public static Log4jLogger logger; // log4j��־
 	public static ArrayList<URL> seed;
 	public static control sc;
 
 	public static void main(String[] args) throws Exception {
-		// ������־
-		PropertyConfigurator.configure("src/log4j.properties");
-		zjicmspider.logger = Logger.getLogger(zjicmspider.class);
-		// ��ȡ����������Ϣ
+
 		String xmlFile = "xml/crawler.xml";
 		spiderconfig wingspider = new spiderconfig();// ����������Ϣ����
 		parserXML spidgetconfig = new parserXML();
@@ -50,19 +44,7 @@ public class wingspider {
 		// star the ask loop
 
 		// getSeedsURL
-		readSeedURL rsUrl = new readSeedURL();
-		// /ArrayList<URL> seed = new ArrayList<>();
-		String sql = "select SiteEnterURL from GatherWebsite";
-		seed = rsUrl.getSeedlist(wingspider.getSpiderIp(), wingspider.getLocalUsername(),
-				wingspider.getlocalUserpassWord(), sql);// �������
-
-		// zjicmSpider spider = new zjicmSpider(seed,
-		// wingspider.getSpiderName(),wingspider.getSpiderId()); //
-		// ÿ��ץȡ�����ȡ��ͬ��urls
-		zjicmspider.logger.info("�������ƣ�" + wingspider.getSpiderName() + "�����б�" + seed);
-		// control sc=new control();
-		// sc.start(seed, wingspider.getSpiderName(),
-		// wingspider.getSpiderType());
+		
 		final sql2005 getSignal = new sql2005();// �½�һ��sql2005����
 		Timer timer = new java.util.Timer(false);
 		TimerTask task = new java.util.TimerTask() {

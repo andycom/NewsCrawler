@@ -9,7 +9,7 @@ import java.util.List;
 import java.util.concurrent.atomic.AtomicLong;
 
 import org.apache.commons.io.FileUtils;
-  
+
 import com.sleepycat.bind.EntryBinding;
 import com.sleepycat.bind.serial.SerialBinding;
 import com.sleepycat.bind.serial.StoredClassCatalog;
@@ -19,14 +19,14 @@ import com.sleepycat.collections.StoredSortedMap;
 import com.sleepycat.je.Database;
 import com.sleepycat.je.DatabaseConfig;
 import com.sleepycat.je.DatabaseException;
-import com.sleepycat.je.DatabaseExistsException;
 import com.sleepycat.je.DatabaseNotFoundException;
 import com.sleepycat.je.EnvironmentConfig;
+
 /**
- * �־û�����,����BDBʵ��,Ҳ�̳�Queue,�Լ��������л�.������ͬ��Queue��ʱ,����ʹ�ú���Ҫ�ر�
- * ���һ����ڴ�Queue,����ͻ�ȡֵ��Ҫ������һ����ʱ��
- * ����Ϊʲô�Ǽ̳�AbstractQueue������ʵ��Queue�ӿ�,����ΪֻҪʵ��offer,peek,poll������������,
- * ������remove,addAll,AbstractQueue������⼸������ȥʵ��
+ * 持久化队列,基于BDB实现,也继承Queue,以及可以序列化.但不等同于Queue的时,不再使用后需要关闭
+ * 相比一般的内存Queue,插入和获取值需要多消耗一定的时间
+ * 这里为什么是继承AbstractQueue而不是实现Queue接口,是因为只要实现offer,peek,poll几个方法即可,
+ * 其他如remove,addAll,AbstractQueue会基于这几个方法去实现
  * 
  * @contributor guoyun
  * @param <E>
@@ -34,66 +34,70 @@ import com.sleepycat.je.EnvironmentConfig;
 public class BdbPersistentQueue<E extends Serializable> extends AbstractQueue<E> implements
         Serializable {
     private static final long serialVersionUID = 3427799316155220967L;
-    private transient BdbEnvironment dbEnv;            // ���ݿ⻷��,�������л�
-    private transient Database queueDb;             // ���ݿ�,���ڱ���ֵ,ʹ��֧�ֶ��г־û�,�������л�
-    private transient StoredMap<Long,E> queueMap;   // �־û�Map,KeyΪָ��λ��,ValueΪֵ,�������л�
-    private transient String dbDir;                 // ���ݿ�����Ŀ¼
-    private transient String dbName;				// ���ݿ�����
-    private AtomicLong headIndex;                   // ͷ��ָ��
-    private AtomicLong tailIndex;                   // β��ָ��
-    private transient E peekItem=null;              // ��ǰ��ȡ��ֵ
+    private transient BdbEnvironment dbEnv;            // 数据库环境,无需序列化
+    private transient Database queueDb;             // 数据库,用于保存值,使得支持队列持久化,无需序列化
+    private transient StoredMap queueMap;   // 持久化Map,Key为指针位置,Value为值,无需序列化
+    private transient String dbDir;                 // 数据库所在目录
+    private transient String dbName;				// 数据库名字
+    private AtomicLong headIndex;                   // 头部指针
+    private AtomicLong tailIndex;                   // 尾部指针
+    private transient E peekItem=null;              // 当前获取的值
     
     /**
-     * ���캯��,����BDB���ݿ�
+     * 构造函数,传入BDB数据库
      * 
      * @param db
      * @param valueClass
      * @param classCatalog
+     * @throws DatabaseException 
      */
-    public BdbPersistentQueue(Database db,Class<E> valueClass,StoredClassCatalog classCatalog){
+    public BdbPersistentQueue(Database db,Class<E> valueClass,StoredClassCatalog classCatalog) throws DatabaseException{
         this.queueDb=db;
         this.dbName=db.getDatabaseName();
-        System.out.println("-----------���ݿ�����dbName"+dbName);
+        System.out.println("-----------数据库名：dbName"+dbName);
         headIndex=new AtomicLong(0);
         tailIndex=new AtomicLong(0);
         bindDatabase(queueDb,valueClass,classCatalog);
     }
     /**
-     * ���캯��,����BDB���ݿ�λ�ú�����,�Լ��������ݿ�
+     * 构造函数,传入BDB数据库位置和名字,自己创建数据库
      * 
      * @param dbDir
      * @param dbName
      * @param valueClass
+     * @throws DatabaseException 
+     * @throws IllegalArgumentException 
+     * @throws DatabaseNotFoundException 
      */
-    public BdbPersistentQueue(String dbDir,String dbName,Class<E> valueClass){
+    public BdbPersistentQueue(String dbDir,String dbName,Class<E> valueClass) throws DatabaseNotFoundException, IllegalArgumentException, DatabaseException{
         headIndex=new AtomicLong(0);
         tailIndex=new AtomicLong(0);
         this.dbDir=dbDir;
         this.dbName=dbName;
-//        System.out.println("-----------���ݿ�·����dbDir"+dbName);
+//        System.out.println("-----------数据库路径：dbDir"+dbName);
         createAndBindDatabase(dbDir,dbName,valueClass);
     }
     /**
-     * �����ݿ�
+     * 绑定数据库
      * 
      * @param db
      * @param valueClass
      * @param classCatalog
      */
     public void bindDatabase(Database db, Class<E> valueClass, StoredClassCatalog classCatalog){
-        EntryBinding<E> valueBinding = TupleBinding.getPrimitiveBinding(valueClass);
+        EntryBinding valueBinding = TupleBinding.getPrimitiveBinding(valueClass);
         if(valueBinding == null) {
-            valueBinding = new SerialBinding<E>(classCatalog, valueClass);   // ���л���
+            valueBinding = new SerialBinding(classCatalog, valueClass);   // 序列化绑定
         }
         queueDb = db;
-        queueMap = new StoredSortedMap<Long,E>(
+        queueMap = new StoredSortedMap(
                 db,                                             // db
                 TupleBinding.getPrimitiveBinding(Long.class),   //Key
                 valueBinding,                                   // Value
                 true);                                          // allow write
     }
     /**
-     * �����Լ������ݿ�
+     * 创建以及绑定数据库
      * 
      * @param dbDir
      * @param dbName
@@ -104,36 +108,36 @@ public class BdbPersistentQueue<E extends Serializable> extends AbstractQueue<E>
      * @throws IllegalArgumentException
      */
     private void createAndBindDatabase(String dbDir, String dbName,Class<E> valueClass) throws DatabaseNotFoundException,
-    DatabaseExistsException,DatabaseException,IllegalArgumentException{
+    DatabaseNotFoundException,DatabaseException,IllegalArgumentException{
         File envFile = null;
         EnvironmentConfig envConfig = null;
         DatabaseConfig dbConfig = null;
         Database db=null;
  
         try {
-            // ���ݿ�λ��
+            // 数据库位置
             envFile = new File(dbDir);
-            System.out.println("-----------�ݿ�λ�ã�dbDir"+dbDir);
-            // ���ݿ⻷������
+            System.out.println("-----------据库位置：dbDir"+dbDir);
+            // 数据库环境配置
             envConfig = new EnvironmentConfig();
             envConfig.setAllowCreate(true);
             envConfig.setTransactional(false);
-            System.out.println("-----------���ݿ⻷���������");
-            // ���ݿ�����
+            System.out.println("-----------数据库环境配置完成");
+            // 数据库配置
             dbConfig = new DatabaseConfig();
             dbConfig.setAllowCreate(true);
             dbConfig.setTransactional(false);
             dbConfig.setDeferredWrite(true);
-            System.out.println("-----------���ݿ����ã�3::"+envFile);
-            // ��������
+            System.out.println("-----------数据库配置：3::"+envFile);
+            // 创建环境
             dbEnv = new BdbEnvironment(envFile, envConfig);
-            System.out.println("-----------�������ݿ⻷����4::"+envConfig);
-            // �����ݿ�
+            System.out.println("-----------创建数据库环境：4::"+envConfig);
+            // 打开数据库
             db = dbEnv.openDatabase(null, dbName, dbConfig);
-            System.out.println("-----------�����ݿ⣺5 ::"+dbName);
-            // �����ݿ�
+            System.out.println("-----------打开数据库：5 ::"+dbName);
+            // 绑定数据库
             bindDatabase(db,valueClass,dbEnv.getClassCatalog());
-            System.out.println("-----------�����ݿ�6"+db+valueClass);
+            System.out.println("-----------绑定数据库6"+db+valueClass);
             
             List myDbNames = dbEnv.getDatabaseNames();  
             System.out.println("Database size: " + myDbNames.size());  
@@ -144,13 +148,10 @@ public class BdbPersistentQueue<E extends Serializable> extends AbstractQueue<E>
              
         } catch (DatabaseNotFoundException e) {
             throw e;
-        } catch (DatabaseExistsException e) {
-        	 System.out.println("����1"+e);
+        } catch (DatabaseException e) {
+        	 System.out.println("报错1"+e);
             throw e;
            
-        } catch (DatabaseException e) {
-        	System.out.println("����2"+e+envFile);
-            throw e;
         } catch (IllegalArgumentException e) {
             throw e;
         }
@@ -159,16 +160,16 @@ public class BdbPersistentQueue<E extends Serializable> extends AbstractQueue<E>
     }
     
     /**
-     * ֵ������
+     * 值遍历器
      */
     @Override
     public Iterator<E> iterator() {
-    	System.out.print("�������ñ���ֵ");
+    	System.out.print("函数调用遍历值");
         return queueMap.values().iterator();
         
     }
     /**
-     * ��С
+     * 大小
      */
     @Override
     public int size() {
@@ -180,42 +181,40 @@ public class BdbPersistentQueue<E extends Serializable> extends AbstractQueue<E>
     }
     
     /**
-     * ����ֵ
+     * 插入值
      */
-    @Override
     public boolean offer(E e) {
         synchronized(tailIndex){
-            queueMap.put(tailIndex.getAndIncrement(), e);   // ��β������
+            queueMap.put(tailIndex.getAndIncrement(), e);   // 从尾部插入
         }
         return true;
     }
     
     /**
-     * ��ȡֵ,��ͷ����ȡ
+     * 获取值,从头部获取
      */
-    @Override
+   
     public E peek() {
         synchronized(headIndex){
             if(peekItem!=null){
                 return peekItem;
             }
-            E headItem=null;
-            while(headItem==null&&headIndex.get()<tailIndex.get()){ // û�г�����Χ
+            Object headItem=null;
+            while(headItem==null&&headIndex.get()<tailIndex.get()){ // 没有超出范围
                 headItem=queueMap.get(headIndex.get());
                 if(headItem!=null){
-                    peekItem=headItem;
+                    peekItem=(E) headItem;
                     continue;
                 } 
-                headIndex.incrementAndGet();    // ͷ��ָ�����
+                headIndex.incrementAndGet();    // 头部指针后移
             }
-            return headItem;
+            return (E) headItem;
         }
     }
     
     /**
-     * �Ƴ�Ԫ��,�Ƴ�ͷ��Ԫ��
+     * 移出元素,移出头部元素
      */
-    @Override
     public E poll() {
         synchronized(headIndex){
             E headItem=peek();
@@ -229,7 +228,7 @@ public class BdbPersistentQueue<E extends Serializable> extends AbstractQueue<E>
     }
     
     /**
-     * �ر�,Ҳ���ǹر������õ�BDB���ݿ⵫���ر����ݿ⻷��
+     * 关闭,也就是关闭所是用的BDB数据库但不关闭数据库环境
      */
     public void close(){
         try {
@@ -247,7 +246,7 @@ public class BdbPersistentQueue<E extends Serializable> extends AbstractQueue<E>
     }
     
     /**
-     * ����,��������ݿ�,����ɾ�����ݿ�����Ŀ¼,����.����뱣������,�����close()
+     * 清理,会清空数据库,并且删掉数据库所在目录,慎用.如果想保留数据,请调用close()
      */
     @Override
     public void clear() {
