@@ -18,21 +18,20 @@ public class zjicmSpider implements Runnable {
 	public boolean htmlSave = false; // ��ȡ�Ƿ�������ҳ
 	public String Task = "2118"; // ��ȡ����������Ϣ,�������ƣ������ڴ����ݿ��·��
 	public int deep = -1; // ��ȡ��ץȡ����ҳ��ȣ�-1������������ơ�
-    public int s;
+	public int s;
+
 	public zjicmSpider() {
-		
+
 	}
 
-	public zjicmSpider(int s,ArrayList<URL> urls, String taskName, int deepth) {
+	public zjicmSpider(int s, ArrayList<URL> urls, String taskName, int deepth) {
 		this.urls = urls;
 		this.deep = deepth;
-		this.s=s;
+		this.s = s;
 	}
 
-	@Override
-	public void run()
-	{   
-	
+	public void run() {
+
 		System.out.println("zjicmSpider�����ﱨѭ��KKKKKK");
 		dispatcher4 disp = null;
 		try {
@@ -41,13 +40,11 @@ public class zjicmSpider implements Runnable {
 			// TODO Auto-generated catch block
 			e.printStackTrace();
 		} // ���̹߳���һ��������
-		for (int i = 0; i < gatherNum; i++) 
-		{
-			Thread gather = new Thread(
-					new Gather(String.valueOf(i), disp, urls));
+		for (int i = 0; i < gatherNum; i++) {
+			Thread gather = new Thread(new Gather(String.valueOf(i), disp, urls));
 			gather.start();
-		}// TODO Auto-generated method stub
-		
+		} // TODO Auto-generated method stub
+
 	}
 
 	/**

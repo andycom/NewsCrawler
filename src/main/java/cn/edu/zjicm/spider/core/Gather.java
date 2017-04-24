@@ -10,6 +10,9 @@ import java.text.SimpleDateFormat;
 import java.util.ArrayList;
 import java.util.Date;
 
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+
 import cn.edu.zjicm.analyzer.util.GetURL;
 import cn.edu.zjicm.spider.core.Dispatcher;
 import cn.edu.zjicm.spider.zjicmspider.zjicmspider;
@@ -17,6 +20,7 @@ import cn.edu.zjicm.util.rangeHost;
 import cn.edu.zjicm.util.urls;
 
 public class Gather implements Runnable {
+	Logger logger = LoggerFactory.getLogger("");
 
 	private dispatcher4 disp;
 	private String ID;
@@ -69,11 +73,11 @@ public class Gather implements Runnable {
 				// TODO Auto-generated catch block
 				e.printStackTrace();
 			}
-			zjicmspider.logger.info("Gather:" + ID + "��" + counter + "��ѭ���� get url: " + url.toString()); // ������ʾ����
+			logger.info("Gather:" + ID + "��" + counter + "��ѭ���� get url: " + url.toString()); // ������ʾ����
 			if (htmlDoc.length() != 0) {
 				ArrayList<String> newURL = UrlAnalyzer.urlDetector(htmlDoc); // �˷���Ϊ����ƥ�����
 				if (newURL.size() != 0)
-					zjicmspider.logger.info("Gather" + ID + "---�»�ȡ��newURL�Ĵ�С" + newURL.size()); // ������ʾ����
+					logger.info("Gather" + ID + "---�»�ȡ��newURL�Ĵ�С" + newURL.size()); // ������ʾ����
 				// �˴�����һ��ɸѡ���̣����Ʋ����url,ͬʱ�������ӵ����
 				try {
 					newURL = range.range2(newURL, url.getoriUrl(), url.getLayer());
@@ -81,7 +85,7 @@ public class Gather implements Runnable {
 					// TODO Auto-generated catch block
 					e.printStackTrace();
 				}
-				zjicmspider.logger.info("Gather" + ID + "-----ɸѡ֮��newURL�Ĵ�С" + newURL.size()); // ������ʾ����
+				logger.info("Gather" + ID + "-----ɸѡ֮��newURL�Ĵ�С" + newURL.size()); // ������ʾ����
 				// �˴�����һ��ɸѡ���̣����Ʋ����url
 				disp.insert1(newURL);
 			}

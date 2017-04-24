@@ -49,7 +49,7 @@
 			<artifactId>je</artifactId>
 			<version>3.2.76</version>
 		</dependency>
-		<!-- https://mvnrepository.com/artifact/berkeleydb/berkeleydb-native -->
+		
 		<dependency>
 			<groupId>berkeleydb</groupId>
 			<artifactId>berkeleydb-native</artifactId>
